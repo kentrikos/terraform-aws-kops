@@ -5,7 +5,7 @@ This module will create a Kubernetes cluster with [kops](https://github.com/kube
 
 Since it's using `local-exec` to run kops under the hood, it must be run from a host meeting the following requirements:
 * kops, kubectl, jq, awscli installed
-* apropriate IAM permissions (check `kentrikos-tf-aws-iam-generator` or/and https://github.com/kubernetes/kops/blob/master/docs/iam_roles.md + in cross-account scenario permissions to assume cross-account role on target account)
+* apropriate IAM permissions (check https://github.com/kubernetes/kops/blob/master/docs/iam_roles.md + in cross-account scenario permissions to assume cross-account role on target account)
 * networking access to target account (e.g. via VPC peering) to contact K8s API
 
 Currently it must be run from a host that has networking access to VPC where cluster will be deployed (e.g. from Jenkins or kops management node deployed before-hand).
@@ -13,10 +13,10 @@ This module does not create IAM policies on its own (just roles/instance profile
 
 
 ## Usage
-### cross-account scenario (deploy from operations/transit into application):
+### cross-account scenario (deploy from operations into application):
 ```hcl
 module "kubernetes_cluster_application" {
-  source = "https://github.com/kentrikos/terraform-aws-kops.git" 
+  source = "github.com/kentrikos//terraform-aws-kops"
 
   cluster_name_prefix        = "${var.product_domain_name}-${var.environment_type}"
   region                     = "${var.region}"
@@ -35,12 +35,12 @@ module "kubernetes_cluster_application" {
 }
 ```
 
-### same-account scenario (deploy on operations/transit):
+### same-account scenario (deploy on operations):
 ```hcl
-module "kubernetes_cluster_transit" {
-  source = "https://github.com/kentrikos/terraform-aws-kops.git"
+module "kubernetes_cluster_operations" {
+  source = "github.com/kentrikos//terraform-aws-kops"
 
-  cluster_name_prefix  = "${var.product_domain_name}-${var.environment_type}-transit"
+  cluster_name_prefix  = "${var.product_domain_name}-${var.environment_type}-operations"
   region               = "${var.region}"
   vpc_id               = "${var.vpc_id}"
   azs                  = "${join(",", var.azs)}"
