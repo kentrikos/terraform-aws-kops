@@ -20,12 +20,7 @@ variable "subnets" {
 
 variable "node_count" {
   description = "Number of worker nodes"
-  default = "1"
-}
-
-variable "iam_cross_account_role_arn" {
-  description = "Cross-account role to assume before deploying the cluster"
-  default = ""
+  default     = "1"
 }
 
 variable "http_proxy" {
@@ -48,14 +43,17 @@ variable "node_instance_type" {
   default     = "m4.large"
 }
 
-variable "masters_iam_policy_arn" {
-  description = "ARN of pre-existing IAM policy with permissions for K8s master instances to be used by kops"
+variable "masters_iam_policies_arns" {
+  description = "List of existing IAM policies that will be attached to instance profile for master nodes (EC2 instances)"
+  type        = "list"
 }
 
-variable "masters_extra_iam_policy_arn" {
-  description = "ARN of additional, pre-existing IAM policy with permissions for K8s master instances to be used by kops"
+variable "nodes_iam_policies_arns" {
+  description = "List of existing IAM policies that will be attached to instance profile for worker nodes (EC2 instances)"
+  type        = "list"
 }
 
-variable "nodes_iam_policy_arn" {
-  description = "ARN of pre-existing IAM policy with permissions for K8s worker instances to be used by kops"
+variable "iam_cross_account_role_arn" {
+  description = "Cross-account role to assume when deploying the cluster (on another account)"
+  default     = ""
 }

@@ -159,14 +159,14 @@ fi
 
 
 # SET VARIABLE FOR KOPS STATE STORE:
-KOPS_BUCKET_NAME="kops-state-${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
+KOPS_BUCKET_NAME="kops-state-${REGION}-${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 export KOPS_STATE_STORE=s3://${KOPS_BUCKET_NAME}
 
 
 # RUN DELETE ACTION IF NECESSARY:
 if [ ${ACTION} == "destroy" ]; then
     echo "* Deleting cluster."
-    [ $? -eq 0 ] && kops delete cluster --state s3://${KOPS_BUCKET_NAME} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} --yes
+    kops delete cluster --state s3://${KOPS_BUCKET_NAME} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} --yes
     if [ ${SUBNETS_TAGGING} == "true" ]; then
         echo "* un-tagging K8s cluster-specific tags in subnets:"
         for s in ${AWS_SUBNETS//,/ }
