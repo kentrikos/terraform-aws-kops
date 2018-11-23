@@ -16,7 +16,7 @@ This module does not create IAM policies on its own (just roles/instance profile
 ### cross-account scenario (deploy from operations into application):
 ```hcl
 module "kubernetes_cluster_application" {
-  source = "github.com/kentrikos//terraform-aws-kops"
+  source = "github.com/kentrikos/terraform-aws-kops"
 
   cluster_name_prefix        = "${var.product_domain_name}-${var.environment_type}"
   region                     = "${var.region}"
@@ -38,7 +38,7 @@ module "kubernetes_cluster_application" {
 ### same-account scenario (deploy on operations):
 ```hcl
 module "kubernetes_cluster_operations" {
-  source = "github.com/kentrikos//terraform-aws-kops"
+  source = "github.com/kentrikos/terraform-aws-kops"
 
   cluster_name_prefix  = "${var.product_domain_name}-${var.environment_type}-operations"
   region               = "${var.region}"
