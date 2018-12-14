@@ -259,12 +259,13 @@ aws s3api put-bucket-versioning --bucket ${KOPS_BUCKET_NAME} --versioning-config
 
 
 # CREATE SSH KEY TO ACCESS K8S INSTANCES (OPTIONALLY):
-if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
+# FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
+#if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
     [[ ! -f ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX} ]] && ssh-keygen -N '' -f ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}
     OPTION_SSH_PUBLIC_KEY="--ssh-public-key ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub"
-else
-    OPTION_SSH_PUBLIC_KEY=""
-fi
+#else
+#    OPTION_SSH_PUBLIC_KEY=""
+#fi
 
 
 # RUN KOPS BUT GENERATE CONFIGS ONLY:
@@ -329,9 +330,10 @@ do
     kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
 done
 ## Secrets:
-if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
+# FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
+#if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
   kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
-fi
+#fi
 
 
 # PRINT OUT SUMMARY:
