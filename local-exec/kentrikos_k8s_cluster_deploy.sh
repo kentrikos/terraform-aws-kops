@@ -291,7 +291,7 @@ ${OPTION_SSH_PUBLIC_KEY} \
 ## Cluster:
 CLUSTER_JQ_FILTER=".[0] | .spec.api.loadBalancer.type = \"Internal\" | .spec.subnets = ${KOPS_SUBNETS_JSON} | .spec.docker.logDriver=\"awslogs\" | .spec.docker.logOpt=[\"awslogs-region=${REGION}\", \"awslogs-group=${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}\"]"
 if [ -n "${AWS_SSH_KEYPAIR_NAME}" ]; then
-  CLUSTER_JQ_FILTER="${CLUSTER_JQ_FILTER} | spec.sshKeyName=\"${AWS_SSH_KEYPAIR_NAME}\""
+  CLUSTER_JQ_FILTER="${CLUSTER_JQ_FILTER} | .spec.sshKeyName=\"${AWS_SSH_KEYPAIR_NAME}\""
 fi
 if [ -n "${HTTP_PROXY_PARAM}" ]; then
     echo "* Including HTTP proxy configuration for: ${HTTP_PROXY_PARAM}."
