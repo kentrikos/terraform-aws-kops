@@ -81,7 +81,7 @@ resource "null_resource" "kubernetes_cluster" {
       --nodes-iam-instance-profile-arn ${aws_iam_instance_profile.nodes.arn} \
       ${local.option_assume_cross_account_role} \
       ${local.option_http_proxy} \
-      ${local.option_disable_natgw}
+      ${local.option_disable_natgw} \
       ${local.option_aws_ssh_keypair_name}
 EOT
 
