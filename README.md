@@ -65,17 +65,18 @@ module "kubernetes_cluster_operations" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|:----:|:-----:|:-----:|
-| azs | Availability Zones for the cluster (1 master per AZ will be deployed, only odd numbers are supported) | string | - | yes |
-| cluster_name_prefix | Your name of the cluster (without domain which is k8s.local by default) | string | - | yes |
-| disable_natgw | Don't use NAT Gateway for egress traffic (may be needed on some accounts) | string | `false` | no |
-| http_proxy | IP[:PORT] - address and optional port of HTTP proxy to be used to download packages | string | `` | no |
-| iam_cross_account_role_arn | Cross-account role to assume when deploying the cluster (on another account) | string | `` | no |
-| master_instance_type | Instance type (size) for master nodes | string | `m4.large` | no |
-| masters_iam_policies_arns | List of existing IAM policies that will be attached to instance profile for master nodes (EC2 instances) | list | - | yes |
-| node_count | Number of worker nodes | string | `1` | no |
-| node_instance_type | Instance type (size) for worker nodes | string | `m4.large` | no |
-| nodes_iam_policies_arns | List of existing IAM policies that will be attached to instance profile for worker nodes (EC2 instances) | list | - | yes |
-| region | AWS region | string | - | yes |
-| subnets | List of private subnets (matching AZs) where to deploy the cluster) | string | - | yes |
-| vpc_id | ID of VPC where cluster will be deployed | string | - | yes |
+| aws\_ssh\_keypair\_name | Optional name of existing SSH keypair on AWS account, to be used for cluster instances (will be generated if not specified) | string | `""` | no |
+| azs | Availability Zones for the cluster (1 master per AZ will be deployed, only odd numbers are supported) | string | n/a | yes |
+| cluster\_name\_prefix | Your name of the cluster (without domain which is k8s.local by default) | string | n/a | yes |
+| disable\_natgw | Don't use NAT Gateway for egress traffic (may be needed on some accounts) | string | `"false"` | no |
+| http\_proxy | IP[:PORT] - address and optional port of HTTP proxy to be used to download packages | string | `""` | no |
+| iam\_cross\_account\_role\_arn | Cross-account role to assume when deploying the cluster (on another account) | string | `""` | no |
+| master\_instance\_type | Instance type (size) for master nodes | string | `"m4.large"` | no |
+| masters\_iam\_policies\_arns | List of existing IAM policies that will be attached to instance profile for master nodes (EC2 instances) | list | n/a | yes |
+| node\_count | Number of worker nodes | string | `"1"` | no |
+| node\_instance\_type | Instance type (size) for worker nodes | string | `"m4.large"` | no |
+| nodes\_iam\_policies\_arns | List of existing IAM policies that will be attached to instance profile for worker nodes (EC2 instances) | list | n/a | yes |
+| region | AWS region | string | n/a | yes |
+| subnets | List of private subnets (matching AZs) where to deploy the cluster) | string | n/a | yes |
+| vpc\_id | ID of VPC where cluster will be deployed | string | n/a | yes |
 

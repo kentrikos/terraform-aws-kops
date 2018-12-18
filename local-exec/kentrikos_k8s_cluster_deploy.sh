@@ -52,13 +52,14 @@ Arguments:
     -d | --node-instance-type STRING (choose instance size for worker nodes)
     -t | --masters-iam-instance-profile-arn STRING (mandatory, ARN of pre-existing instance profile for master instances)
     -b | --nodes-iam-instance-profile-arn STRING (mandatory, ARN of pre-existing instance profile for worker instances)
+    -k | --ssh-keypair-name STRING (optional, name of existing SSH keypair on AWS account, to be used for cluster instances)"
     -h | --help
 EOF
 }
 
 
 # PARSE COMMAND LINE PARAMETERS:
-OPTS=$(getopt -o c:x:r:v:z:a:s:n:p:u:l:m:d:t:b:wgh --long cluster-name-prefix:,cluster-name-postfix:,region:,vpc-id:,az:,action:,subnets:,node-count:,http-proxy:,assume-cross-account-role:,tags:,master-instance-type:,node-instance-type:,masters-iam-instance-profile-arn:,nodes-iam-instance-profile-arn:,disable-natgw,disable-subnets-tagging,help -n 'parse-options' -- "$@")
+OPTS=$(getopt -o c:x:r:v:z:a:s:n:p:u:l:m:d:t:b:k:wgh --long cluster-name-prefix:,cluster-name-postfix:,region:,vpc-id:,az:,action:,subnets:,node-count:,http-proxy:,assume-cross-account-role:,tags:,master-instance-type:,node-instance-type:,masters-iam-instance-profile-arn:,nodes-iam-instance-profile-arn:,ssh-keypair-name:,disable-natgw,disable-subnets-tagging,help -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$OPTS"
@@ -82,6 +83,7 @@ while true; do
     -n | --node-instance-type ) K8S_NODE_INSTANCE_TYPE="$2"; shift; shift ;;
     -t | --masters-iam-instance-profile-arn ) K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN="$2"; shift; shift ;;
     -b | --nodes-iam-instance-profile-arn ) K8S_NODES_IAM_INSTANCE_PROFILE_ARN="$2"; shift; shift ;;
+    -k | --ssh-keypair-name ) AWS_SSH_KEYPAIR_NAME="$2"; shift; shift ;;
     -h | --help ) usage; exit 0; shift; shift ;;
     -- ) shift; break ;;
     * ) break ;;
@@ -115,6 +117,7 @@ K8S_MASTER_INSTANCE_TYPE             : $K8S_MASTER_INSTANCE_TYPE
 K8S_NODE_INSTANCE_TYPE               : $K8S_NODE_INSTANCE_TYPE
 K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN : $K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN
 K8S_NODES_IAM_INSTANCE_PROFILE_ARN   : $K8S_NODES_IAM_INSTANCE_PROFILE_ARN
+AWS_SSH_KEYPAIR_NAME                 : $AWS_SSH_KEYPAIR_NAME
 -----------------------------------------------------------
 EOF
 echo "ENVIRONMENT:"
@@ -255,8 +258,14 @@ aws s3 ls ${KOPS_BUCKET_NAME} || aws s3api create-bucket --bucket ${KOPS_BUCKET_
 aws s3api put-bucket-versioning --bucket ${KOPS_BUCKET_NAME} --versioning-configuration Status=Enabled
 
 
-# CREATE SSH KEY TO ACCESS K8S INSTANCES:
-[[ ! -f ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX} ]] && ssh-keygen -N '' -f ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}
+# CREATE SSH KEY TO ACCESS K8S INSTANCES (OPTIONALLY):
+# FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
+#if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
+    [[ ! -f ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX} ]] && ssh-keygen -N '' -f ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}
+    OPTION_SSH_PUBLIC_KEY="--ssh-public-key ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub"
+#else
+#    OPTION_SSH_PUBLIC_KEY=""
+#fi
 
 
 # RUN KOPS BUT GENERATE CONFIGS ONLY:
@@ -273,7 +282,7 @@ kops create cluster \
 --master-size ${K8S_MASTER_INSTANCE_TYPE} \
 --node-size ${K8S_NODE_INSTANCE_TYPE} \
 --networking calico \
---ssh-public-key ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub \
+${OPTION_SSH_PUBLIC_KEY} \
 --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} \
 --cloud-labels ${TAGS} \
 --dry-run --output json > ${CLUSTER_NAME_PREFIX}-kops-original.json
@@ -282,12 +291,14 @@ kops create cluster \
 # MODIFY OUTPUT FILE WITH CLUSTER SPECIFICATION:
 ## Cluster:
 CLUSTER_JQ_FILTER=".[0] | .spec.api.loadBalancer.type = \"Internal\" | .spec.subnets = ${KOPS_SUBNETS_JSON} | .spec.docker.logDriver=\"awslogs\" | .spec.docker.logOpt=[\"awslogs-region=${REGION}\", \"awslogs-group=${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}\"]"
+if [ -n "${AWS_SSH_KEYPAIR_NAME}" ]; then
+  CLUSTER_JQ_FILTER="${CLUSTER_JQ_FILTER} | .spec.sshKeyName=\"${AWS_SSH_KEYPAIR_NAME}\""
+fi
 if [ -n "${HTTP_PROXY_PARAM}" ]; then
     echo "* Including HTTP proxy configuration for: ${HTTP_PROXY_PARAM}."
     HTTP_PROXY_HOST=$(echo ${HTTP_PROXY_PARAM} | sed -e 's/:[0-9]\+//')
     HTTP_PROXY_PORT=$(echo ${HTTP_PROXY_PARAM} | grep -o ':[0-9]\+$' | sed -e 's/://')
     CLUSTER_JQ_FILTER="${CLUSTER_JQ_FILTER} | .spec.egressProxy.httpProxy.host = \"${HTTP_PROXY_HOST}\" | .spec.egressProxy.httpProxy.port = ${HTTP_PROXY_PORT} | .spec.egressProxy.excludes = \"${HTTP_PROXY_EXCLUDES}\""
-    #CLUSTER_JQ_FILTER="${CLUSTER_JQ_FILTER} | .spec.egressProxy.httpProxy.host = \"${HTTP_PROXY_HOST}\" | .spec.egressProxy.httpProxy.port = ${HTTP_PROXY_PORT}"
 fi
 cat ${CLUSTER_NAME_PREFIX}-kops-original.json | jq "${CLUSTER_JQ_FILTER}" > ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json
 ## InstanceGroups:
@@ -319,7 +330,10 @@ do
     kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
 done
 ## Secrets:
-kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
+# FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
+#if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
+  kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
+#fi
 
 
 # PRINT OUT SUMMARY:

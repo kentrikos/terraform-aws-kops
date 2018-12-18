@@ -57,3 +57,8 @@ variable "iam_cross_account_role_arn" {
   description = "Cross-account role to assume when deploying the cluster (on another account)"
   default     = ""
 }
+
+variable "aws_ssh_keypair_name" {
+  description = "Optional name of existing SSH keypair on AWS account, to be used for cluster instances (will be generated if not specified)"
+  default     = ""
+}
