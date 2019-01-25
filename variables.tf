@@ -62,3 +62,8 @@ variable "aws_ssh_keypair_name" {
   description = "Optional name of existing SSH keypair on AWS account, to be used for cluster instances (will be generated if not specified)"
   default     = ""
 }
+
+variable "distro" {
+  description = "Linux distribution for K8s cluster instances (supported values: debian, amzn2)"
+  default = "amzn2"
+}

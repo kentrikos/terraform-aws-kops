@@ -281,6 +281,7 @@ kops create cluster \
 --api-loadbalancer-type internal \
 --master-size ${K8S_MASTER_INSTANCE_TYPE} \
 --node-size ${K8S_NODE_INSTANCE_TYPE} \
+--image amazon.com/amzn2-ami-hvm-2.0.20190115-arm64-gp2 \
 --networking calico \
 ${OPTION_SSH_PUBLIC_KEY} \
 --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} \
