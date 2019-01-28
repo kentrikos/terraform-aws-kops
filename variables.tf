@@ -63,7 +63,7 @@ variable "aws_ssh_keypair_name" {
   default     = ""
 }
 
-variable "distro" {
+variable "linux_distro" {
   description = "Linux distribution for K8s cluster instances (supported values: debian, amzn2)"
-  default = "amzn2"
+  default     = "amzn2"
 }

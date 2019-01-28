@@ -26,6 +26,7 @@ K8S_NODE_INSTANCE_TYPE="m3.medium"
 K8S_MIN_HEALTHY_MASTERS="1"
 K8S_MIN_HEALTHY_NODES="1"
 HTTP_PROXY_EXCLUDES="compute.internal"
+LINUX_DISTRO="debian"
 
 
 # USAGE FUNCTION:
@@ -53,13 +54,14 @@ Arguments:
     -t | --masters-iam-instance-profile-arn STRING (mandatory, ARN of pre-existing instance profile for master instances)
     -b | --nodes-iam-instance-profile-arn STRING (mandatory, ARN of pre-existing instance profile for worker instances)
     -k | --ssh-keypair-name STRING (optional, name of existing SSH keypair on AWS account, to be used for cluster instances)"
+    -e | --linux-distro STRING (optional, name od Linux distribution for cluster instances, supported values: debian (default), amzn2)
     -h | --help
 EOF
 }
 
 
 # PARSE COMMAND LINE PARAMETERS:
-OPTS=$(getopt -o c:x:r:v:z:a:s:n:p:u:l:m:d:t:b:k:wgh --long cluster-name-prefix:,cluster-name-postfix:,region:,vpc-id:,az:,action:,subnets:,node-count:,http-proxy:,assume-cross-account-role:,tags:,master-instance-type:,node-instance-type:,masters-iam-instance-profile-arn:,nodes-iam-instance-profile-arn:,ssh-keypair-name:,disable-natgw,disable-subnets-tagging,help -n 'parse-options' -- "$@")
+OPTS=$(getopt -o c:x:r:v:z:a:s:n:p:u:l:m:d:t:b:k:e:wgh --long cluster-name-prefix:,cluster-name-postfix:,region:,vpc-id:,az:,action:,subnets:,node-count:,http-proxy:,assume-cross-account-role:,tags:,master-instance-type:,node-instance-type:,masters-iam-instance-profile-arn:,nodes-iam-instance-profile-arn:,ssh-keypair-name:,linux-distro:,disable-natgw,disable-subnets-tagging,help -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$OPTS"
@@ -84,6 +86,7 @@ while true; do
     -t | --masters-iam-instance-profile-arn ) K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN="$2"; shift; shift ;;
     -b | --nodes-iam-instance-profile-arn ) K8S_NODES_IAM_INSTANCE_PROFILE_ARN="$2"; shift; shift ;;
     -k | --ssh-keypair-name ) AWS_SSH_KEYPAIR_NAME="$2"; shift; shift ;;
+    -e | --linux-distro ) LINUX_DISTRO="$2"; shift; shift ;;
     -h | --help ) usage; exit 0; shift; shift ;;
     -- ) shift; break ;;
     * ) break ;;
@@ -118,6 +121,7 @@ K8S_NODE_INSTANCE_TYPE               : $K8S_NODE_INSTANCE_TYPE
 K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN : $K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN
 K8S_NODES_IAM_INSTANCE_PROFILE_ARN   : $K8S_NODES_IAM_INSTANCE_PROFILE_ARN
 AWS_SSH_KEYPAIR_NAME                 : $AWS_SSH_KEYPAIR_NAME
+LINUX_DISTRO                         : $LINUX_DISTRO
 -----------------------------------------------------------
 EOF
 echo "ENVIRONMENT:"
@@ -268,6 +272,31 @@ aws s3api put-bucket-versioning --bucket ${KOPS_BUCKET_NAME} --versioning-config
 #fi
 
 
+# FIND APPROPRIATE AMI FOR CLUSTER INSTANCES:
+OPTION_IMAGE=""
+case "${LINUX_DISTRO}" in
+    debian)
+        echo "Using default Linux distribution..."
+        ;;
+    amzn2)
+        AMI=$(aws ec2 describe-images --region=${REGION} --owner=137112412989 \
+                --filters "Name=name,Values=amzn2-ami-hvm-2*-x86_64-gp2" \
+                --query 'sort_by(Images,&CreationDate)[-1].{name:Name}' \
+                | jq -r '.name')
+        if [ -z "${AMI}" ];
+        then
+            echo "ERROR: AMI for ${LINUX_DISTRO} not found"
+            exit 1
+        else
+          OPTION_IMAGE="--image amazon.com/${AMI}"
+        fi
+        ;;
+    *)
+        echo "ERROR: unsupported Linux distribution: ${LINUX_DISTRO}"
+        exit 1
+        ;;
+esac
+
 # RUN KOPS BUT GENERATE CONFIGS ONLY:
 rm -f ${CLUSTER_NAME_PREFIX}-kops-original.json
 kops create cluster \
@@ -281,7 +310,7 @@ kops create cluster \
 --api-loadbalancer-type internal \
 --master-size ${K8S_MASTER_INSTANCE_TYPE} \
 --node-size ${K8S_NODE_INSTANCE_TYPE} \
---image amazon.com/amzn2-ami-hvm-2.0.20190115-x86_64-gp2 \
+${OPTION_IMAGE} \
 --networking calico \
 ${OPTION_SSH_PUBLIC_KEY} \
 --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} \
