@@ -1,19 +1,20 @@
 # A Terraform module to deploy Kubernetes cluster with kops (beta)
 
-
 This module will create a Kubernetes cluster with [kops](https://github.com/kubernetes/kops/).
 
 Since it's using `local-exec` to run kops under the hood, it must be run from a host meeting the following requirements:
+
 * kops, kubectl, jq, awscli installed
-* apropriate IAM permissions (check https://github.com/kubernetes/kops/blob/master/docs/iam_roles.md + in cross-account scenario permissions to assume cross-account role on target account)
+* apropriate IAM permissions (check <https://github.com/kubernetes/kops/blob/master/docs/iam_roles.md> + in cross-account scenario permissions to assume cross-account role on target account)
 * networking access to target account (e.g. via VPC peering) to contact K8s API
 
 Currently it must be run from a host that has networking access to VPC where cluster will be deployed (e.g. from Jenkins or kops management node deployed before-hand).
 This module does not create IAM policies on its own (just roles/instance profiles), instead it expect them to be created beforehand and passed as parameters.
 
-
 ## Usage
-### cross-account scenario (deploy from operations into application):
+
+### cross-account scenario (deploy from operations into application)
+
 ```hcl
 module "kubernetes_cluster_application" {
   source = "github.com/kentrikos/terraform-aws-kops"
@@ -27,6 +28,7 @@ module "kubernetes_cluster_application" {
   node_count                 = "${var.k8s_node_count}"
   master_instance_type       = "${var.k8s_master_instance_type}"
   node_instance_type         = "${var.k8s_node_instance_type}"
+  aws_ssh_keypair_name       = "${var.aws_ssh_keypair_name}"
 
   masters_iam_policies_arns  = "${var.k8s_masters_iam_policies_arns}"
   nodes_iam_policies_arns    = "${var.k8s_nodes_iam_policies_arns}"
@@ -35,7 +37,8 @@ module "kubernetes_cluster_application" {
 }
 ```
 
-### same-account scenario (deploy on operations):
+### same-account scenario (deploy on operations)
+
 ```hcl
 module "kubernetes_cluster_operations" {
   source = "github.com/kentrikos/terraform-aws-kops"
@@ -51,32 +54,37 @@ module "kubernetes_cluster_operations" {
   node_count           = "${var.k8s_node_count}"
   master_instance_type = "${var.k8s_master_instance_type}"
   node_instance_type   = "${var.k8s_node_instance_type}"
+  aws_ssh_keypair_name       = "${var.aws_ssh_keypair_name}"
 
   masters_iam_policies_arns  = "${var.k8s_masters_iam_policies_arns}"
   nodes_iam_policies_arns    = "${var.k8s_nodes_iam_policies_arns}"
 }
 ```
 
-### Notes:
-* cluster names must be currently globally unique per region (due to kops using S3 bucket for state)
+### Notes
 
+* Cluster names must be currently globally unique per region (due to kops using S3 bucket for state)
+* This module supports (optionally) Amazon Linux 2 as Linux distribution for cluster instances (as opposed to kops default, which is Debian),
+  for which support in kops is still considered "experimental".
+  For details/current state please check: <https://github.com/kubernetes/kops/blob/master/docs/images.md>
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|:----:|:-----:|:-----:|
-| aws\_ssh\_keypair\_name | Optional name of existing SSH keypair on AWS account, to be used for cluster instances (will be generated if not specified) | string | `""` | no |
-| azs | Availability Zones for the cluster (1 master per AZ will be deployed, only odd numbers are supported) | string | n/a | yes |
-| cluster\_name\_prefix | Your name of the cluster (without domain which is k8s.local by default) | string | n/a | yes |
-| disable\_natgw | Don't use NAT Gateway for egress traffic (may be needed on some accounts) | string | `"false"` | no |
-| http\_proxy | IP[:PORT] - address and optional port of HTTP proxy to be used to download packages | string | `""` | no |
-| iam\_cross\_account\_role\_arn | Cross-account role to assume when deploying the cluster (on another account) | string | `""` | no |
-| master\_instance\_type | Instance type (size) for master nodes | string | `"m4.large"` | no |
-| masters\_iam\_policies\_arns | List of existing IAM policies that will be attached to instance profile for master nodes (EC2 instances) | list | n/a | yes |
-| node\_count | Number of worker nodes | string | `"1"` | no |
-| node\_instance\_type | Instance type (size) for worker nodes | string | `"m4.large"` | no |
-| nodes\_iam\_policies\_arns | List of existing IAM policies that will be attached to instance profile for worker nodes (EC2 instances) | list | n/a | yes |
-| region | AWS region | string | n/a | yes |
-| subnets | List of private subnets (matching AZs) where to deploy the cluster) | string | n/a | yes |
-| vpc\_id | ID of VPC where cluster will be deployed | string | n/a | yes |
+| aws_ssh_keypair_name | Optional name of existing SSH keypair on AWS account, to be used for cluster instances (will be generated if not specified) | string | `` | no |
+| azs | Availability Zones for the cluster (1 master per AZ will be deployed, only odd numbers are supported) | string | - | yes |
+| cluster_name_prefix | Your name of the cluster (without domain which is k8s.local by default) | string | - | yes |
+| disable_natgw | Don't use NAT Gateway for egress traffic (may be needed on some accounts) | string | `false` | no |
+| http_proxy | IP[:PORT] - address and optional port of HTTP proxy to be used to download packages | string | `` | no |
+| iam_cross_account_role_arn | Cross-account role to assume when deploying the cluster (on another account) | string | `` | no |
+| linux_distro | Linux distribution for K8s cluster instances (supported values: debian, amzn2) | string | `debian` | no |
+| master_instance_type | Instance type (size) for master nodes | string | `m4.large` | no |
+| masters_iam_policies_arns | List of existing IAM policies that will be attached to instance profile for master nodes (EC2 instances) | list | - | yes |
+| node_count | Number of worker nodes | string | `1` | no |
+| node_instance_type | Instance type (size) for worker nodes | string | `m4.large` | no |
+| nodes_iam_policies_arns | List of existing IAM policies that will be attached to instance profile for worker nodes (EC2 instances) | list | - | yes |
+| region | AWS region | string | - | yes |
+| subnets | List of private subnets (matching AZs) where to deploy the cluster) | string | - | yes |
+| vpc_id | ID of VPC where cluster will be deployed | string | - | yes |
 
