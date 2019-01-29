@@ -64,7 +64,7 @@ module "kubernetes_cluster_operations" {
 ### Notes
 
 * Cluster names must be currently globally unique per region (due to kops using S3 bucket for state)
-* This module uses Amazon Linux 2 as default Linux distribution (as opposed to kops default, which is Debian),
+* This module supports (optionally) Amazon Linux 2 as Linux distribution for cluster instances (as opposed to kops default, which is Debian),
   for which support in kops is still considered "experimental".
   For details/current state please check: <https://github.com/kubernetes/kops/blob/master/docs/images.md>
 
@@ -78,7 +78,7 @@ module "kubernetes_cluster_operations" {
 | disable_natgw | Don't use NAT Gateway for egress traffic (may be needed on some accounts) | string | `false` | no |
 | http_proxy | IP[:PORT] - address and optional port of HTTP proxy to be used to download packages | string | `` | no |
 | iam_cross_account_role_arn | Cross-account role to assume when deploying the cluster (on another account) | string | `` | no |
-| linux_distro | Linux distribution for K8s cluster instances (supported values: debian, amzn2) | string | `amzn2` | no |
+| linux_distro | Linux distribution for K8s cluster instances (supported values: debian, amzn2) | string | `debian` | no |
 | master_instance_type | Instance type (size) for master nodes | string | `m4.large` | no |
 | masters_iam_policies_arns | List of existing IAM policies that will be attached to instance profile for master nodes (EC2 instances) | list | - | yes |
 | node_count | Number of worker nodes | string | `1` | no |
