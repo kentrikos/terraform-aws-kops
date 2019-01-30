@@ -27,9 +27,10 @@ K8S_MIN_HEALTHY_MASTERS="1"
 K8S_MIN_HEALTHY_NODES="1"
 HTTP_PROXY_EXCLUDES="compute.internal"
 LINUX_DISTRO="debian"
+RUN_AND_CHECK_MAX_RETRIES="5"
 
-
-# USAGE FUNCTION:
+## BASH FUNCTIONS:
+# USAGE:
 usage() {
     cat <<EOF
 Usage: ./kentrikos_k8s_cluster_deploy.sh [OPTIONS]
@@ -57,6 +58,25 @@ Arguments:
     -e | --linux-distro STRING (optional, name od Linux distribution for cluster instances, supported values: debian (default), amzn2)
     -h | --help
 EOF
+}
+
+# WRAPPER AROUND ERROR-PRONE COMMANDS:
+function run_and_check {
+    i="1"
+    echo "* Running command BEGIN {"
+    echo "* command: \"$@\""
+    until "$@"
+    do
+        if [ "${i}" -gt "${RUN_AND_CHECK_MAX_RETRIES}" ];
+        then
+            echo "* ERROR: too many retries, aborting."
+            exit 1
+        fi
+        echo "* command returned with error, retrying: $i/${RUN_AND_CHECK_MAX_RETRIES}"
+        sleep 5
+        i=$((i + 1))
+    done
+    echo "* } END"
 }
 
 
@@ -122,10 +142,19 @@ K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN : $K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN
 K8S_NODES_IAM_INSTANCE_PROFILE_ARN   : $K8S_NODES_IAM_INSTANCE_PROFILE_ARN
 AWS_SSH_KEYPAIR_NAME                 : $AWS_SSH_KEYPAIR_NAME
 LINUX_DISTRO                         : $LINUX_DISTRO
+RUN_AND_CHECK_MAX_RETRIES            : ${RUN_AND_CHECK_MAX_RETRIES}
 -----------------------------------------------------------
 EOF
 echo "ENVIRONMENT:"
 env
+echo "-----------------------------------------------------------"
+echo "VERSIONS:"
+set -x
+kops version
+kubectl version --client false
+aws --version
+jq --version
+set +x
 echo "-----------------------------------------------------------"
 
 
@@ -369,9 +398,9 @@ done
 # PRINT OUT SUMMARY:
 set +x
 echo "-----------------------------------------------------------------------"
-kops get cluster ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
-kops get instancegroups --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
-kops get secrets --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check kops get cluster ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check kops get instancegroups --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check kops get secrets --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
 echo "-----------------------------------------------------------------------"
 echo "* Configuration ready, press Enter to launch deployment, ctrl-C to break."
 read
@@ -398,6 +427,7 @@ do
         echo "* CLUSTER LOOKS OPERATIONAL (may still need some time to fully settle down)."
         break
     else
+        echo "Please wait (number of healthy masters/MIN and nodes/MIN: ${K8S_NUMBER_OF_HEALTHY_MASTERS}/${K8S_MIN_HEALTHY_MASTERS} and ${K8S_NUMBER_OF_HEALTHY_NODES}/${K8S_NUMBER_OF_HEALTHY_NODES})..."
         sleep 30s
     fi
 done
