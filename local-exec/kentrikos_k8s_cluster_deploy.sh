@@ -148,6 +148,14 @@ EOF
 echo "ENVIRONMENT:"
 env
 echo "-----------------------------------------------------------"
+echo "VERSIONS:"
+set -x
+kops version
+kubectl version --client false
+aws --version
+jq --version
+set +x
+echo "-----------------------------------------------------------"
 
 
 # PRINT ALL COMMANDS FROM HERE:
