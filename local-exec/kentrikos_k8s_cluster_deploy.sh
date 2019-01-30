@@ -64,6 +64,7 @@ EOF
 function run_and_check {
     i="1"
     echo "* Running command BEGIN {"
+    echo "* command: \"$@\""
     until "$@"
     do
         if [ "${i}" -gt "${RUN_AND_CHECK_MAX_RETRIES}" ];
@@ -418,7 +419,7 @@ do
         echo "* CLUSTER LOOKS OPERATIONAL (may still need some time to fully settle down)."
         break
     else
-        echo "Please wait (number of healthy masters/MIN and nodes/MIN: ${K8S_NUMBER_OF_HEALTHY_MASTERS}/${K8S_MIN_HEALTHY_MASTERS} and ${K8S_NUMBER_OF_HEALTHY_NODES}/${K8S_NUMBER_OF_HEALTHY_NODES})"
+        echo "Please wait (number of healthy masters/MIN and nodes/MIN: ${K8S_NUMBER_OF_HEALTHY_MASTERS}/${K8S_MIN_HEALTHY_MASTERS} and ${K8S_NUMBER_OF_HEALTHY_NODES}/${K8S_NUMBER_OF_HEALTHY_NODES})...
         sleep 30s
     fi
 done
