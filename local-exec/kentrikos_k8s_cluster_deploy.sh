@@ -356,7 +356,7 @@ ${OPTION_IMAGE} \
 ${OPTION_SSH_PUBLIC_KEY} \
 --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} \
 --cloud-labels ${TAGS} \
---dry-run --output json | grep kind > ${CLUSTER_NAME_PREFIX}-kops-original.json"
+--dry-run --output json > ${CLUSTER_NAME_PREFIX}-kops-original.json"
 
 
 # MODIFY OUTPUT FILE WITH CLUSTER SPECIFICATION:
