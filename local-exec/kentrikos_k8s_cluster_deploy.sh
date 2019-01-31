@@ -61,20 +61,32 @@ EOF
 }
 
 # WRAPPER AROUND ERROR-PRONE COMMANDS:
+## This function takes 1 parameter (string), please wrap multi-param commands in ""
+## examples:
+##  run_and_check "ls /tmp/aaa /tmp/bbb"
+##  run_and_check "ls /tmp/aaa /tmp/bbb > /tmp/log"
 function run_and_check {
-    i="1"
+    r="1"
     echo "* Running command BEGIN {"
     echo "* command: \"$@\""
-    until "$@"
+    while true;
     do
-        if [ "${i}" -gt "${RUN_AND_CHECK_MAX_RETRIES}" ];
+        bash -c "$@"
+        EXIT_CODE="${?}"
+        if [ "${EXIT_CODE}" -ne 0 ];
         then
-            echo "* ERROR: too many retries, aborting."
-            exit 1
+            if [ "${r}" -ge "$((${RUN_AND_CHECK_MAX_RETRIES} + 1))" ];
+            then
+                echo "* ERROR: too many retries, aborting."
+                exit 1
+            else
+                echo "* command returned with error (${EXIT_CODE}), retrying: $r/${RUN_AND_CHECK_MAX_RETRIES}"
+                sleep 5
+                r=$((r + 1))
+            fi
+        else
+            break
         fi
-        echo "* command returned with error, retrying: $i/${RUN_AND_CHECK_MAX_RETRIES}"
-        sleep 5
-        i=$((i + 1))
     done
     echo "* } END"
 }
@@ -328,7 +340,7 @@ esac
 
 # RUN KOPS BUT GENERATE CONFIGS ONLY:
 rm -f ${CLUSTER_NAME_PREFIX}-kops-original.json
-run_and_check kops create cluster \
+run_and_check "kops create cluster \
 --vpc ${VPC_ID} \
 --zones ${AWS_AZS} \
 --master-zones ${AWS_AZS} \
@@ -344,7 +356,7 @@ ${OPTION_IMAGE} \
 ${OPTION_SSH_PUBLIC_KEY} \
 --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} \
 --cloud-labels ${TAGS} \
---dry-run --output json > ${CLUSTER_NAME_PREFIX}-kops-original.json
+--dry-run --output json | grep kind > ${CLUSTER_NAME_PREFIX}-kops-original.json"
 
 
 # MODIFY OUTPUT FILE WITH CLUSTER SPECIFICATION:
@@ -373,7 +385,7 @@ INSTANCE_GROUPS_COUNT=$(grep InstanceGroup ${CLUSTER_NAME_PREFIX}-kops-original.
 
 # CREATE KOPS OBJECTS:
 ## Cluster:
-run_and_check kops create -f ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check "kops create -f ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 ## InstanceGroups:
 for i in $(seq 1 $INSTANCE_GROUPS_COUNT);
 do
@@ -386,21 +398,21 @@ do
         IG_JQ_FILTER=".spec.iam.profile = \"${K8S_NODES_IAM_INSTANCE_PROFILE_ARN}\""
     fi
     cat ${JSON_FILE_INPUT} | jq "${IG_JQ_FILTER}" > ${JSON_FILE_OUTPUT}
-    run_and_check kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+    run_and_check "kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 done
 ## Secrets:
 # FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
 #if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
-  run_and_check kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
+  run_and_check "kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub"
 #fi
 
 
 # PRINT OUT SUMMARY:
 set +x
 echo "-----------------------------------------------------------------------"
-run_and_check kops get cluster ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
-run_and_check kops get instancegroups --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
-run_and_check kops get secrets --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check "kops get cluster ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
+run_and_check "kops get instancegroups --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
+run_and_check "kops get secrets --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 echo "-----------------------------------------------------------------------"
 echo "* Configuration ready, press Enter to launch deployment, ctrl-C to break."
 read
