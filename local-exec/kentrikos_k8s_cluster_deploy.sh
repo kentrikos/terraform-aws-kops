@@ -328,7 +328,7 @@ esac
 
 # RUN KOPS BUT GENERATE CONFIGS ONLY:
 rm -f ${CLUSTER_NAME_PREFIX}-kops-original.json
-kops create cluster \
+run_and_check kops create cluster \
 --vpc ${VPC_ID} \
 --zones ${AWS_AZS} \
 --master-zones ${AWS_AZS} \
@@ -373,7 +373,7 @@ INSTANCE_GROUPS_COUNT=$(grep InstanceGroup ${CLUSTER_NAME_PREFIX}-kops-original.
 
 # CREATE KOPS OBJECTS:
 ## Cluster:
-kops create -f ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check kops create -f ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
 ## InstanceGroups:
 for i in $(seq 1 $INSTANCE_GROUPS_COUNT);
 do
@@ -386,12 +386,12 @@ do
         IG_JQ_FILTER=".spec.iam.profile = \"${K8S_NODES_IAM_INSTANCE_PROFILE_ARN}\""
     fi
     cat ${JSON_FILE_INPUT} | jq "${IG_JQ_FILTER}" > ${JSON_FILE_OUTPUT}
-    kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+    run_and_check kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
 done
 ## Secrets:
 # FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
 #if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
-  kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
+  run_and_check kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
 #fi
 
 
