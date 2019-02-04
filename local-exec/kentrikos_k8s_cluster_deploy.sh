@@ -300,6 +300,8 @@ fi
 
 # CHECK IF KOPS STATE BUCKET EXISTS AND CREATE OTHERWISE, ALSO ENABLE VERSIONING:    
 aws s3 ls ${KOPS_BUCKET_NAME} || aws s3api create-bucket --bucket ${KOPS_BUCKET_NAME} --region ${REGION} ${S3_BUCKET_CONFIGURATION}
+echo "Eventual consistency check for bucket creation:"
+run_and_check "aws s3api head-bucket --bucket ${KOPS_BUCKET_NAME}"
 aws s3api put-bucket-versioning --bucket ${KOPS_BUCKET_NAME} --versioning-configuration Status=Enabled
 
 
@@ -439,7 +441,7 @@ do
         echo "* CLUSTER LOOKS OPERATIONAL (may still need some time to fully settle down)."
         break
     else
-        echo "Please wait (number of healthy masters/MIN and nodes/MIN: ${K8S_NUMBER_OF_HEALTHY_MASTERS}/${K8S_MIN_HEALTHY_MASTERS} and ${K8S_NUMBER_OF_HEALTHY_NODES}/${K8S_NUMBER_OF_HEALTHY_NODES})..."
+        echo "Please wait (number of healthy masters/MIN and nodes/MIN: ${K8S_NUMBER_OF_HEALTHY_MASTERS}/${K8S_MIN_HEALTHY_MASTERS} and ${K8S_NUMBER_OF_HEALTHY_NODES}/${K8S_MIN_HEALTHY_NODES})..."
         sleep 30s
     fi
 done
