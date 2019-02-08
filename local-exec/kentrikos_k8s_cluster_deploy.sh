@@ -26,9 +26,11 @@ K8S_NODE_INSTANCE_TYPE="m3.medium"
 K8S_MIN_HEALTHY_MASTERS="1"
 K8S_MIN_HEALTHY_NODES="1"
 HTTP_PROXY_EXCLUDES="compute.internal"
+LINUX_DISTRO="debian"
+RUN_AND_CHECK_MAX_RETRIES="5"
 
-
-# USAGE FUNCTION:
+## BASH FUNCTIONS:
+# USAGE:
 usage() {
     cat <<EOF
 Usage: ./kentrikos_k8s_cluster_deploy.sh [OPTIONS]
@@ -53,13 +55,45 @@ Arguments:
     -t | --masters-iam-instance-profile-arn STRING (mandatory, ARN of pre-existing instance profile for master instances)
     -b | --nodes-iam-instance-profile-arn STRING (mandatory, ARN of pre-existing instance profile for worker instances)
     -k | --ssh-keypair-name STRING (optional, name of existing SSH keypair on AWS account, to be used for cluster instances)"
+    -e | --linux-distro STRING (optional, name od Linux distribution for cluster instances, supported values: debian (default), amzn2)
     -h | --help
 EOF
 }
 
+# WRAPPER AROUND ERROR-PRONE COMMANDS:
+## This function takes 1 parameter (string), please wrap multi-param commands in ""
+## examples:
+##  run_and_check "ls /tmp/aaa /tmp/bbb"
+##  run_and_check "ls /tmp/aaa /tmp/bbb > /tmp/log"
+function run_and_check {
+    r="1"
+    echo "* Running command BEGIN {"
+    echo "* command: \"$@\""
+    while true;
+    do
+        bash -c "$@"
+        EXIT_CODE="${?}"
+        if [ "${EXIT_CODE}" -ne 0 ];
+        then
+            if [ "${r}" -ge "$((${RUN_AND_CHECK_MAX_RETRIES} + 1))" ];
+            then
+                echo "* ERROR: too many retries, aborting."
+                exit 1
+            else
+                echo "* command returned with error (${EXIT_CODE}), retrying: $r/${RUN_AND_CHECK_MAX_RETRIES}"
+                sleep 5
+                r=$((r + 1))
+            fi
+        else
+            break
+        fi
+    done
+    echo "* } END"
+}
+
 
 # PARSE COMMAND LINE PARAMETERS:
-OPTS=$(getopt -o c:x:r:v:z:a:s:n:p:u:l:m:d:t:b:k:wgh --long cluster-name-prefix:,cluster-name-postfix:,region:,vpc-id:,az:,action:,subnets:,node-count:,http-proxy:,assume-cross-account-role:,tags:,master-instance-type:,node-instance-type:,masters-iam-instance-profile-arn:,nodes-iam-instance-profile-arn:,ssh-keypair-name:,disable-natgw,disable-subnets-tagging,help -n 'parse-options' -- "$@")
+OPTS=$(getopt -o c:x:r:v:z:a:s:n:p:u:l:m:d:t:b:k:e:wgh --long cluster-name-prefix:,cluster-name-postfix:,region:,vpc-id:,az:,action:,subnets:,node-count:,http-proxy:,assume-cross-account-role:,tags:,master-instance-type:,node-instance-type:,masters-iam-instance-profile-arn:,nodes-iam-instance-profile-arn:,ssh-keypair-name:,linux-distro:,disable-natgw,disable-subnets-tagging,help -n 'parse-options' -- "$@")
 if [ $? != 0 ]; then usage; exit 1; fi
 
 eval set -- "$OPTS"
@@ -84,6 +118,7 @@ while true; do
     -t | --masters-iam-instance-profile-arn ) K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN="$2"; shift; shift ;;
     -b | --nodes-iam-instance-profile-arn ) K8S_NODES_IAM_INSTANCE_PROFILE_ARN="$2"; shift; shift ;;
     -k | --ssh-keypair-name ) AWS_SSH_KEYPAIR_NAME="$2"; shift; shift ;;
+    -e | --linux-distro ) LINUX_DISTRO="$2"; shift; shift ;;
     -h | --help ) usage; exit 0; shift; shift ;;
     -- ) shift; break ;;
     * ) break ;;
@@ -118,10 +153,20 @@ K8S_NODE_INSTANCE_TYPE               : $K8S_NODE_INSTANCE_TYPE
 K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN : $K8S_MASTERS_IAM_INSTANCE_PROFILE_ARN
 K8S_NODES_IAM_INSTANCE_PROFILE_ARN   : $K8S_NODES_IAM_INSTANCE_PROFILE_ARN
 AWS_SSH_KEYPAIR_NAME                 : $AWS_SSH_KEYPAIR_NAME
+LINUX_DISTRO                         : $LINUX_DISTRO
+RUN_AND_CHECK_MAX_RETRIES            : ${RUN_AND_CHECK_MAX_RETRIES}
 -----------------------------------------------------------
 EOF
 echo "ENVIRONMENT:"
 env
+echo "-----------------------------------------------------------"
+echo "VERSIONS:"
+set -x
+kops version
+kubectl version --client false
+aws --version
+jq --version
+set +x
 echo "-----------------------------------------------------------"
 
 
@@ -255,6 +300,8 @@ fi
 
 # CHECK IF KOPS STATE BUCKET EXISTS AND CREATE OTHERWISE, ALSO ENABLE VERSIONING:    
 aws s3 ls ${KOPS_BUCKET_NAME} || aws s3api create-bucket --bucket ${KOPS_BUCKET_NAME} --region ${REGION} ${S3_BUCKET_CONFIGURATION}
+echo "Eventual consistency check for bucket creation:"
+run_and_check "aws s3api head-bucket --bucket ${KOPS_BUCKET_NAME}"
 aws s3api put-bucket-versioning --bucket ${KOPS_BUCKET_NAME} --versioning-configuration Status=Enabled
 
 
@@ -268,9 +315,34 @@ aws s3api put-bucket-versioning --bucket ${KOPS_BUCKET_NAME} --versioning-config
 #fi
 
 
+# FIND APPROPRIATE AMI FOR CLUSTER INSTANCES:
+OPTION_IMAGE=""
+case "${LINUX_DISTRO}" in
+    debian)
+        echo "Using default Linux distribution..."
+        ;;
+    amzn2)
+        AMI=$(aws ec2 describe-images --region=${REGION} --owner=137112412989 \
+                --filters "Name=name,Values=amzn2-ami-hvm-2*-x86_64-gp2" \
+                --query 'sort_by(Images,&CreationDate)[-1].{name:Name}' \
+                | jq -r '.name')
+        if [ -z "${AMI}" ];
+        then
+            echo "ERROR: AMI for ${LINUX_DISTRO} not found"
+            exit 1
+        else
+          OPTION_IMAGE="--image amazon.com/${AMI}"
+        fi
+        ;;
+    *)
+        echo "ERROR: unsupported Linux distribution: ${LINUX_DISTRO}"
+        exit 1
+        ;;
+esac
+
 # RUN KOPS BUT GENERATE CONFIGS ONLY:
 rm -f ${CLUSTER_NAME_PREFIX}-kops-original.json
-kops create cluster \
+run_and_check "kops create cluster \
 --vpc ${VPC_ID} \
 --zones ${AWS_AZS} \
 --master-zones ${AWS_AZS} \
@@ -281,11 +353,12 @@ kops create cluster \
 --api-loadbalancer-type internal \
 --master-size ${K8S_MASTER_INSTANCE_TYPE} \
 --node-size ${K8S_NODE_INSTANCE_TYPE} \
+${OPTION_IMAGE} \
 --networking calico \
 ${OPTION_SSH_PUBLIC_KEY} \
 --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} \
 --cloud-labels ${TAGS} \
---dry-run --output json > ${CLUSTER_NAME_PREFIX}-kops-original.json
+--dry-run --output json > ${CLUSTER_NAME_PREFIX}-kops-original.json"
 
 
 # MODIFY OUTPUT FILE WITH CLUSTER SPECIFICATION:
@@ -314,7 +387,7 @@ INSTANCE_GROUPS_COUNT=$(grep InstanceGroup ${CLUSTER_NAME_PREFIX}-kops-original.
 
 # CREATE KOPS OBJECTS:
 ## Cluster:
-kops create -f ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check "kops create -f ${CLUSTER_NAME_PREFIX}-kops-modified-cluster.json ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 ## InstanceGroups:
 for i in $(seq 1 $INSTANCE_GROUPS_COUNT);
 do
@@ -327,21 +400,21 @@ do
         IG_JQ_FILTER=".spec.iam.profile = \"${K8S_NODES_IAM_INSTANCE_PROFILE_ARN}\""
     fi
     cat ${JSON_FILE_INPUT} | jq "${IG_JQ_FILTER}" > ${JSON_FILE_OUTPUT}
-    kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+    run_and_check "kops create -f ${JSON_FILE_OUTPUT} ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 done
 ## Secrets:
 # FIXME: conditional statement disabled due to: https://github.com/kubernetes/kops/issues/4728
 #if [ -z "${AWS_SSH_KEYPAIR_NAME}" ]; then
-  kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub
+  run_and_check "kops create secret --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX} sshpublickey admin -i ~/.ssh/id_rsa_${CLUSTER_NAME_PREFIX}.pub"
 #fi
 
 
 # PRINT OUT SUMMARY:
 set +x
 echo "-----------------------------------------------------------------------"
-kops get cluster ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
-kops get instancegroups --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
-kops get secrets --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}
+run_and_check "kops get cluster ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
+run_and_check "kops get instancegroups --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
+run_and_check "kops get secrets --name ${CLUSTER_NAME_PREFIX}.${CLUSTER_NAME_POSTFIX}"
 echo "-----------------------------------------------------------------------"
 echo "* Configuration ready, press Enter to launch deployment, ctrl-C to break."
 read
@@ -368,6 +441,7 @@ do
         echo "* CLUSTER LOOKS OPERATIONAL (may still need some time to fully settle down)."
         break
     else
+        echo "Please wait (number of healthy masters/MIN and nodes/MIN: ${K8S_NUMBER_OF_HEALTHY_MASTERS}/${K8S_MIN_HEALTHY_MASTERS} and ${K8S_NUMBER_OF_HEALTHY_NODES}/${K8S_MIN_HEALTHY_NODES})..."
         sleep 30s
     fi
 done

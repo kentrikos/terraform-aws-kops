@@ -59,6 +59,7 @@ locals {
   option_disable_natgw             = "${var.disable_natgw == "true" ? "--disable-natgw" : ""}"
   option_assume_cross_account_role = "${var.iam_cross_account_role_arn != "" ? "--assume-cross-account-role ${var.iam_cross_account_role_arn}" : ""}"
   option_aws_ssh_keypair_name      = "${var.aws_ssh_keypair_name != "" ? "--ssh-keypair-name ${var.aws_ssh_keypair_name}" : ""}"
+  option_linux_distro              = "--linux-distro ${var.linux_distro}"
 }
 
 resource "null_resource" "kubernetes_cluster" {
@@ -82,7 +83,8 @@ resource "null_resource" "kubernetes_cluster" {
       ${local.option_assume_cross_account_role} \
       ${local.option_http_proxy} \
       ${local.option_disable_natgw} \
-      ${local.option_aws_ssh_keypair_name}
+      ${local.option_aws_ssh_keypair_name} \
+      ${local.option_linux_distro}
 EOT
 
     working_dir = "kops"
