@@ -67,3 +67,8 @@ variable "linux_distro" {
   description = "Linux distribution for K8s cluster instances (supported values: debian, amzn2)"
   default     = "debian"
 }
+
+variable "enable_module" {
+  description = "Controls if the KOPS module will be created (all resources)"
+  default     = true
+}

@@ -12,45 +12,50 @@ data "aws_iam_policy_document" "instance-assume-role-policy" {
 
 # IAM CONFIGURATION FOR MASTER INSTANCES:
 resource "aws_iam_instance_profile" "masters" {
-  name = "k8s_masters_${var.cluster_name_prefix}.k8s.local"
-  role = "${aws_iam_role.masters.name}"
+  count = "${var.enable_module ? 1 : 0}"
+  name  = "k8s_masters_${var.cluster_name_prefix}.k8s.local"
+  role  = "${aws_iam_role.masters.name}"
 }
 
 resource "aws_iam_role" "masters" {
-  name = "k8s_masters_${var.cluster_name_prefix}.k8s.local"
-  path = "/"
+  count = "${var.enable_module ? 1 : 0}"
+  name  = "k8s_masters_${var.cluster_name_prefix}.k8s.local"
+  path  = "/"
 
   assume_role_policy = "${data.aws_iam_policy_document.instance-assume-role-policy.json}"
 }
 
 resource "aws_iam_role_policy_attachment" "masters" {
   role       = "${aws_iam_role.masters.name}"
-  count      = "${length(var.masters_iam_policies_arns)}"
+  count      = "${var.enable_module ? length(var.masters_iam_policies_arns) : 0}"
   policy_arn = "${var.masters_iam_policies_arns[count.index]}"
 }
 
 # IAM CONFIGURATION FOR WORKER INSTANCES (NODES):
 resource "aws_iam_instance_profile" "nodes" {
-  name = "k8s_nodes_${var.cluster_name_prefix}.k8s.local"
-  role = "${aws_iam_role.nodes.name}"
+  count = "${var.enable_module ? 1 : 0}"
+  name  = "k8s_nodes_${var.cluster_name_prefix}.k8s.local"
+  role  = "${aws_iam_role.nodes.name}"
 }
 
 resource "aws_iam_role" "nodes" {
-  name = "k8s_nodes_${var.cluster_name_prefix}.k8s.local"
-  path = "/"
+  count = "${var.enable_module ? 1 : 0}"
+  name  = "k8s_nodes_${var.cluster_name_prefix}.k8s.local"
+  path  = "/"
 
   assume_role_policy = "${data.aws_iam_policy_document.instance-assume-role-policy.json}"
 }
 
 resource "aws_iam_role_policy_attachment" "nodes" {
   role       = "${aws_iam_role.nodes.name}"
-  count      = "${length(var.nodes_iam_policies_arns)}"
+  count      = "${var.enable_module ? length(var.nodes_iam_policies_arns) : 0}"
   policy_arn = "${var.nodes_iam_policies_arns[count.index]}"
 }
 
 # CLOUDWATCH LOG GROUP:
 resource "aws_cloudwatch_log_group" "k8s-cluster" {
-  name = "${var.cluster_name_prefix}.k8s.local"
+  count = "${var.enable_module ? 1 : 0}"
+  name  = "${var.cluster_name_prefix}.k8s.local"
 }
 
 # WRAPPER RESOURCE AROUND K8S CLUSTER DEPLOYMENT SCRIPT:
@@ -63,6 +68,7 @@ locals {
 }
 
 resource "null_resource" "kubernetes_cluster" {
+  count      = "${var.enable_module ? 1 : 0}"
   depends_on = ["aws_iam_instance_profile.masters", "aws_iam_instance_profile.nodes", "aws_cloudwatch_log_group.k8s-cluster"]
 
   provisioner "local-exec" {
