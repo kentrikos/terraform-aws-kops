@@ -76,6 +76,7 @@ module "kubernetes_cluster_operations" {
 | azs | Availability Zones for the cluster (1 master per AZ will be deployed, only odd numbers are supported) | string | - | yes |
 | cluster_name_prefix | Your name of the cluster (without domain which is k8s.local by default) | string | - | yes |
 | disable_natgw | Don't use NAT Gateway for egress traffic (may be needed on some accounts) | string | `false` | no |
+| enable_module | Controls if the KOPS module will be created (all resources) | string | `true` | no |
 | http_proxy | IP[:PORT] - address and optional port of HTTP proxy to be used to download packages | string | `` | no |
 | iam_cross_account_role_arn | Cross-account role to assume when deploying the cluster (on another account) | string | `` | no |
 | linux_distro | Linux distribution for K8s cluster instances (supported values: debian, amzn2) | string | `debian` | no |
